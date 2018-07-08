@@ -7,7 +7,7 @@ func main(){
 
 	bc.AddBlock([]byte("Send Chengxs One coin"))
 
-	//bc.AddBlock([]byte("Send Chengxs Tow coin"))
+	bc.AddBlock([]byte("Send Chengxs Tow coin"))
 
 	bc.Print()
 }

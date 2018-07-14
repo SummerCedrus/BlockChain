@@ -21,9 +21,6 @@ type BlockChainIter struct{
 	bucketName []byte
 }
 
-type CLI struct {
-	bc *BlockChain
-}
 func (bc *BlockChain) AddBlock(data []byte) error{
 	nb := block.NewBlock(bc.tip, data)
 	db := bc.db
@@ -58,9 +55,7 @@ func (bc *BlockChain) Print() {
 		}
 	}
 }
-func (bc *BlockChain) NewCLI() *CLI{
-	return &CLI{bc:bc}
-}
+
 func (bci *BlockChainIter) Next() *block.Block{
 	db := bci.db
 	curBlock := new(block.Block)
@@ -84,20 +79,6 @@ func (bci *BlockChainIter) Next() *block.Block{
 	//fmt.Printf("[%x] [%x]\n",curBlock.PreBlockHash,curBlock.Hash)
 	return curBlock
 }
-
-//func (cli *CLI)Run(){
-//	addblock := flag.NewFlagSet("addblock", flag.ExitOnError)
-//	print := flag.NewFlagSet("print", flag.ExitOnError)
-//
-//	if len(os.Args)>
-//	switch os.Args[1] {
-//	case "addblock":
-//		addblock.Parse(os.Args[2:])
-//	case "print":
-//		print.Parse(os.Args[2:])
-//	}
-//
-//}
 
 func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 	bc := new(BlockChain)

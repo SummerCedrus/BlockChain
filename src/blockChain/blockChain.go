@@ -7,6 +7,8 @@ import (
 	"misc"
 	"errors"
 	"bytes"
+	."tx"
+	"encoding/hex"
 )
 
 type BlockChain struct {
@@ -55,6 +57,46 @@ func (bc *BlockChain) Print() {
 		}
 	}
 }
+
+//找出够消耗的未花费的输出
+//return map[交易ID]输出Index
+func (bc *BlockChain) getUnSpendList(address string, amount int32) (int32, map[string]int32){
+	outPuts := make(map[string]int32, 0)
+	return 0, outPuts
+}
+
+func (bc *BlockChain) getUnSpendTransactions(address string) []*Transaction{
+	bci := bc.Iterator()
+	//记录被引用的输出map[交易id]输出index
+	spendOuts := make(map[string]int,0)
+	for{
+		b := bci.Next()
+		//整理每笔交易的输入输出，交易是有先后顺序的.先有输出，才有输入
+		for _, tx := range b.Transactions {
+			txID := hex.EncodeToString(tx.ID)
+			//先处理输出
+			for index, output := range tx.Vout {
+				isSpend := false
+				if _, ok := spendOuts[txID]; ok {
+					for _, outindex := range spendOuts[txID] {
+						if index == outindex {
+							isSpend = true
+							break
+						}
+					}
+				}
+				if isSpend{
+
+				}
+			}
+		}
+		if len(b.PreBlockHash) == 0 {
+			break
+		}
+	}
+
+}
+
 
 func (bci *BlockChainIter) Next() *block.Block{
 	db := bci.db

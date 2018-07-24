@@ -1,10 +1,10 @@
 package tx
 
 import (
-	"blockChain"
 	"fmt"
 	"misc"
 	"crypto/sha256"
+	"blockChain"
 )
 
 type Transaction struct {
@@ -30,7 +30,7 @@ func NewTransaction(from, to string, amount int32, bc blockChain.BlockChain) *Tr
 	total, outPutInfos := getUnSpendList(from, amount)
 	if total < amount{
 		fmt.Errorf("Not Enough Coins!")
-		return
+		return nil
 	}
 
 	for txId, outIndex := range outPutInfos{
@@ -61,7 +61,7 @@ func NewTransaction(from, to string, amount int32, bc blockChain.BlockChain) *Tr
 
 	tx.setID()
 
-	return t
+	return tx
 
 }
 
@@ -70,9 +70,11 @@ func (tx *Transaction) setID(){
 	hash := sha256.Sum256(data)
 	tx.ID = hash[:]
 }
-//找出够消耗的未花费的输出
-//return map[交易ID]输出Index
-func getUnSpendList(address string, amount int32) (int32, map[string]int32){
-	outPuts := make(map[string]int32, 0)
-	return 0, outPuts
-}d
+
+func (txIn *TxInput) CanUnLockOutPutByAddr(address string) bool{
+	return txIn.ScriptSig == address
+}
+
+func (txOut *TxOutput) CanBeUnLockByAddr(address string) bool{
+	return txOut.ScriptPubKey == address
+}

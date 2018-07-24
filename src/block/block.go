@@ -8,13 +8,14 @@ import (
 	"math"
 	"crypto/sha256"
 	"fmt"
+	."tx"
 )
 
 type Block struct{
 	Timestamp int64		//时间戳,自1970-01-01 00:00经过的秒
 	PreBlockHash []byte //父hash
 	Hash []byte			//自己的hash
-	Data []byte			//交易信息
+	Transactions []*Transaction			//交易信息
 	Nonce	  int64		//计数器
 }
 

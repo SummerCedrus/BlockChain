@@ -71,12 +71,12 @@ func (pow *ProofOfWork) Validate() bool{
 	return result.Cmp(pow.Target) == -1
 }
 
-func NewBlock(preBlockHash []byte, data []byte) *Block{
+func NewBlock(preBlockHash []byte,  tx[]*Transaction) *Block{
 	beginSec := time.Now().Unix()
 	newBlock := &Block{
 		Timestamp: time.Now().Unix(),
 		PreBlockHash: preBlockHash,
-		Data:data,
+		Transactions:tx,
 	}
 
 	pow := newBlock.NewProofOfWork()
@@ -88,8 +88,8 @@ func NewBlock(preBlockHash []byte, data []byte) *Block{
 }
 
 // 创世块
-func NewGenesisBlock() *Block{
-	nb := NewBlock([]byte{}, []byte("Genesis Block"))
+func NewGenesisBlock(coinBaseTx *Transaction) *Block{
+	nb := NewBlock([]byte{}, []*Transaction{coinBaseTx})
 	return nb
 }
 

@@ -1,10 +1,8 @@
 package tx
 
 import (
-	"fmt"
 	"misc"
 	"crypto/sha256"
-	"blockChain"
 )
 
 type Transaction struct {
@@ -24,48 +22,11 @@ type TxInput struct {
 	ScriptSig string
 }
 
-func NewTransaction(from, to string, amount int32, bc blockChain.BlockChain) *Transaction{
-	inPuts := make([]TxInput, 0)
-	outPuts := make([]TxOutput, 0)
-	total, outPutInfos := getUnSpendList(from, amount)
-	if total < amount{
-		fmt.Errorf("Not Enough Coins!")
-		return nil
-	}
-
-	for txId, outIndex := range outPutInfos{
-		inPut := TxInput{
-			TxId: []byte(txId),
-			OutIndex: outIndex,
-			ScriptSig:from,
-		}
-		inPuts = append(inPuts, inPut)
-	}
-
-	outPuts = append(outPuts, TxOutput{
-		Value: amount,
-		ScriptPubKey:to,
-	})
-	//如果有找零，再创建个输出
-	if total > amount{
-		outPuts = append(outPuts, TxOutput{
-			Value: total - amount,
-			ScriptPubKey: to,
-		})
-	}
-
-	tx := &Transaction{
-		Vin:inPuts,
-		Vout:outPuts,
-	}
-
-	tx.setID()
-
-	return tx
-
+type UpSpendTxs struct {
+	ID 		[]byte
+	Outs	map[int32]TxOutput
 }
-
-func (tx *Transaction) setID(){
+func (tx *Transaction) SetID(){
 	data := misc.Serialize(tx)
 	hash := sha256.Sum256(data)
 	tx.ID = hash[:]

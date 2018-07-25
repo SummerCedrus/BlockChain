@@ -59,42 +59,71 @@ func (bc *BlockChain) Print() {
 }
 
 //找出够消耗的未花费的输出
-//return map[交易ID]输出Index
-func (bc *BlockChain) getUnSpendList(address string, amount int32) (int32, map[string]int32){
-	outPuts := make(map[string]int32, 0)
-	return 0, outPuts
+//return btcoin数, map[交易ID]输出Index
+func (bc *BlockChain) getUnSpendInfo(address string, amount int32) (int32, map[string][]int32){
+	outPuts := make(map[string][]int32, 0)
+	unSpendTxs := bc.getUnSpendTransactions(address)
+	total := int32(0)
+	for _, tx:= range unSpendTxs{
+		txId := hex.EncodeToString(tx.ID)
+		for index, out := range tx.Outs{
+			total += out.Value
+			outPuts[txId] = append(outPuts[txId], index)
+			if total >= amount{
+				goto Complete
+			}
+		}
+	}
+	Complete:
+
+	return total, outPuts
 }
 
-func (bc *BlockChain) getUnSpendTransactions(address string) []*Transaction{
+func (bc *BlockChain) getUnSpendTransactions(address string) []UpSpendTxs{
 	bci := bc.Iterator()
+	//记录未花费输出map[交易id]输出index
+	unSpendOuts := make([]UpSpendTxs,0)
 	//记录被引用的输出map[交易id]输出index
-	spendOuts := make(map[string]int,0)
+	spendOuts := make(map[string][]int32,0)
 	for{
 		b := bci.Next()
 		//整理每笔交易的输入输出，交易是有先后顺序的.先有输出，才有输入
 		for _, tx := range b.Transactions {
+			txWithUpSpendOuts := UpSpendTxs{
+				ID:tx.ID,
+			}
 			txID := hex.EncodeToString(tx.ID)
 			//先处理输出
 			for index, output := range tx.Vout {
 				isSpend := false
 				if _, ok := spendOuts[txID]; ok {
 					for _, outindex := range spendOuts[txID] {
-						if index == outindex {
+						if int32(index) == outindex {
 							isSpend = true
 							break
 						}
 					}
 				}
-				if isSpend{
+				if !isSpend&&output.CanBeUnLockByAddr(address){
+					txWithUpSpendOuts.Outs[int32(index)] = output
+					unSpendOuts = append(unSpendOuts, txWithUpSpendOuts)
+				}
+			}
 
+			//把这笔交易能解锁输出的输入记录下来
+			for _, input := range tx.Vin {
+				if input.CanUnLockOutPutByAddr(address){
+					quoteTxId := hex.EncodeToString(input.TxId)
+					spendOuts[quoteTxId] = append(spendOuts[quoteTxId], input.OutIndex)
 				}
 			}
 		}
+
 		if len(b.PreBlockHash) == 0 {
 			break
 		}
 	}
-
+	return unSpendOuts
 }
 
 
@@ -154,4 +183,56 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 
 	return bc
 }
+
+func NewTransaction(from, to string, amount int32, bc BlockChain) *Transaction{
+	inPuts := make([]TxInput, 0)
+	outPuts := make([]TxOutput, 0)
+	total, outPutInfos := bc.getUnSpendInfo(from, amount)
+	if total < amount{
+		fmt.Errorf("Not Enough Coins!")
+		return nil
+	}
+
+	for txId, outIndexs := range outPutInfos{
+		for _, index := range outIndexs{
+			inPut := TxInput{
+				TxId: []byte(txId),
+				OutIndex: index,
+				ScriptSig:from,
+			}
+			inPuts = append(inPuts, inPut)
+		}
+	}
+
+	outPuts = append(outPuts, TxOutput{
+		Value: amount,
+		ScriptPubKey:to,
+	})
+	//如果有找零，再创建个输出
+	if total > amount{
+		outPuts = append(outPuts, TxOutput{
+			Value: total - amount,
+			ScriptPubKey: to,
+		})
+	}
+
+	tx := &Transaction{
+		Vin:inPuts,
+		Vout:outPuts,
+	}
+
+	tx.SetID()
+
+	return tx
+}
+
+func NewCoinBaseTX(to string, data string) *Transaction{
+	outPuts := make([]TxOutput, 0)
+
+	out := TxOutput{
+		Value:misc.CoinAward,
+		ScriptPubKey:to,
+	}
+}
+
 

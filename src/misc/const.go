@@ -1,3 +1,6 @@
 package misc
 
-const TargetBit = 24
+const (
+	TargetBit = 24
+	CoinAward = 10
+)

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"blockChain"
 	"fmt"
+	"blockChain"
+	"cil"
 )
 
 func main(){
@@ -11,9 +12,6 @@ func main(){
 		fmt.Println("open block chain failed!")
 		return
 	}
-	bc.AddBlock([]byte("Send Chengxs One coin"))
-
-	bc.AddBlock([]byte("Send Chengxs Tow coin"))
-
-	bc.Print()
+	cil := cil.NewCLI(bc)
+	cil.Run()
 }

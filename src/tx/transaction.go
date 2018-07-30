@@ -26,7 +26,7 @@ type UpSpendTxs struct {
 	ID 		[]byte
 	Outs	map[int32]TxOutput
 }
-func (tx *Transaction) SetID(){
+func (tx *Transaction) GenID(){
 	data := misc.Serialize(tx)
 	hash := sha256.Sum256(data)
 	tx.ID = hash[:]

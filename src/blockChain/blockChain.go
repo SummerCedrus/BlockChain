@@ -4,7 +4,7 @@ import (
 	"block"
 	"fmt"
 	."github.com/bolt"
-	"misc"
+	."misc"
 	"errors"
 	"bytes"
 	."tx"
@@ -23,15 +23,15 @@ type BlockChainIter struct{
 	bucketName []byte
 }
 
-func (bc *BlockChain) AddBlock(data []byte) error{
-	nb := block.NewBlock(bc.tip, data)
+func (bc *BlockChain) AddBlock(txs []*Transaction) error{
+	nb := block.NewBlock(bc.tip, txs)
 	db := bc.db
 	err := db.Update(func(tx *Tx) error {
 		bk := tx.Bucket(bc.bucketName)
 		if nil == bk{
 			return errors.New("bucket does not exist")
 		}
-		bk.Put(nb.Hash, misc.Serialize(nb))
+		bk.Put(nb.Hash, Serialize(nb))
 		bk.Put([]byte("tip"), nb.Hash)
 
 		return nil
@@ -40,7 +40,10 @@ func (bc *BlockChain) AddBlock(data []byte) error{
 	bc.tip = nb.Hash
 	return err
 }
+//挖矿
+func (bc *BlockChain) MineBlock(address string, txs []*Transaction) error{
 
+}
 func (bc *BlockChain) Iterator() *BlockChainIter{
 	return &BlockChainIter{currHash:bc.tip, db:bc.db, bucketName:bc.bucketName}
 }
@@ -49,7 +52,7 @@ func (bc *BlockChain) Print() {
 	iter := bc.Iterator()
 	for {
 		block := iter.Next()
-		fmt.Printf("[%x] [%x] [%s]\n", block.PreBlockHash, block.Hash, string(block.Data))
+		fmt.Printf("[%x] [%x]\n", block.PreBlockHash, block.Hash)
 
 		if 0 == bytes.Compare(block.PreBlockHash, []byte{}) {
 			fmt.Println("chain end")
@@ -126,7 +129,17 @@ func (bc *BlockChain) getUnSpendTransactions(address string) []UpSpendTxs{
 	return unSpendOuts
 }
 
+func (bc *BlockChain) GetBalance(address string) int32{
+	balance := int32(0)
+	txos := bc.getUnSpendTransactions(address)
+	for _, txo := range txos{
+		for _, out := range txo.Outs{
+			balance += out.Value
+		}
+	}
 
+	return balance
+}
 func (bci *BlockChainIter) Next() *block.Block{
 	db := bci.db
 	curBlock := new(block.Block)
@@ -136,7 +149,7 @@ func (bci *BlockChainIter) Next() *block.Block{
 		if nil == data{
 			return errors.New("can't find block")
 		}
-		err := misc.Deserialize(data, curBlock)
+		err := Deserialize(data, curBlock)
 
 		if nil != err{
 			fmt.Errorf("Deserialize failed error[%v]", err.Error())
@@ -164,9 +177,10 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 		bk = tx.Bucket([]byte(bucketName))
 		if nil == bk{
 			bk, err = tx.CreateBucket([]byte(bucketName))
-			genBlock := block.NewGenesisBlock()
+			coinBaseTx := NewCoinBaseTX(FirstAddress,"GenesisBlock Award Coin")
+			genBlock := block.NewGenesisBlock(coinBaseTx)
 			bk.Put([]byte("tip"), genBlock.Hash)
-			bk.Put(genBlock.Hash, misc.Serialize(genBlock))
+			bk.Put(genBlock.Hash, Serialize(genBlock))
 			bc.tip = genBlock.Hash
 			return err
 		}else{
@@ -184,7 +198,7 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 	return bc
 }
 
-func NewTransaction(from, to string, amount int32, bc BlockChain) *Transaction{
+func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
 	inPuts := make([]TxInput, 0)
 	outPuts := make([]TxOutput, 0)
 	total, outPutInfos := bc.getUnSpendInfo(from, amount)
@@ -221,7 +235,7 @@ func NewTransaction(from, to string, amount int32, bc BlockChain) *Transaction{
 		Vout:outPuts,
 	}
 
-	tx.SetID()
+	tx.GenID()
 
 	return tx
 }
@@ -230,9 +244,22 @@ func NewCoinBaseTX(to string, data string) *Transaction{
 	outPuts := make([]TxOutput, 0)
 
 	out := TxOutput{
-		Value:misc.CoinAward,
+		Value:CoinAward,
 		ScriptPubKey:to,
 	}
+
+	outPuts = append(outPuts, out)
+
+	in := TxInput{[]byte{}, -1, data}
+
+	tx := Transaction{
+		Vout:outPuts,
+		Vin:[]TxInput{in},
+	}
+
+	tx.GenID()
+
+	return &tx
 }
 
 

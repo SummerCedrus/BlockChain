@@ -35,7 +35,7 @@ type ProofOfWork struct {
 func (pow *ProofOfWork) Prepare(nonce int64) []byte{
 	data := bytes.Join([][]byte{
 		pow.Block.PreBlockHash,
-		pow.Block.Data,
+		pow.Block.HashTxs(),
 		Int2Byte(TargetBit),
 		Int2Byte(pow.Block.Timestamp),
 		Int2Byte(nonce),
@@ -104,5 +104,15 @@ func (b *Block)NewProofOfWork() *ProofOfWork{
 	return pow
 }
 
+func (b *Block)HashTxs() []byte{
+	hashData := make([]byte, 0)
+	for _, tx := range b.Transactions{
+		hashData = append(hashData, tx.ID ...)
+	}
+
+	hashResult := sha256.Sum256(hashData)
+
+	return hashResult[:]
+}
 
 

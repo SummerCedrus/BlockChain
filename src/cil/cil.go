@@ -19,7 +19,7 @@ func NewCLI(bc *blockChain.BlockChain) *CLI{
 
 func (cli *CLI)Run(){
 	addblock := flag.NewFlagSet("addblock", flag.ExitOnError)
-	printChain := flag.NewFlagSet("print", flag.ExitOnError)
+	printChain := flag.NewFlagSet("printChain", flag.ExitOnError)
 	balance := flag.NewFlagSet("balance", flag.ExitOnError)
 	send := flag.NewFlagSet("send", flag.ExitOnError)
 

@@ -42,7 +42,7 @@ func (bc *BlockChain) AddBlock(txs []*Transaction) error{
 }
 //挖矿
 func (bc *BlockChain) MineBlock(address string, txs []*Transaction) error{
-
+		return nil
 }
 func (bc *BlockChain) Iterator() *BlockChainIter{
 	return &BlockChainIter{currHash:bc.tip, db:bc.db, bucketName:bc.bucketName}

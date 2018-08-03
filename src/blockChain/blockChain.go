@@ -113,9 +113,9 @@ func (bc *BlockChain) getUnSpendTransactions(address string) []UpSpendTxs{
 				}
 			}
 
-			//把这笔交易能解锁输出的输入记录下来
 			for _, input := range tx.Vin {
-				if input.CanUnLockOutPutByAddr(address){
+				//输入的pubkey能对上钱包地址hash来的pubkey，说明是这个钱包创建的这个输入，这个输入肯定引用的这个钱包包含的输出
+				if input.CanUnLockOutPut(address){
 					quoteTxId := hex.EncodeToString(input.TxId)
 					spendOuts[quoteTxId] = append(spendOuts[quoteTxId], input.OutIndex)
 				}

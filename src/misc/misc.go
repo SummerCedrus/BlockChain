@@ -6,6 +6,8 @@ import (
 	"encoding/gob"
 	"fmt"
 	"math/big"
+	"crypto/sha256"
+	"golang.org/x/crypto/ripemd160"
 )
 
 func Int2Byte(i int64) []byte{
@@ -37,6 +39,22 @@ func Deserialize(b []byte, e interface{}) error{
 }
 
 var b58Alphabet = []byte("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
+
+func HashPubKey(pubKey []byte) []byte{
+	pubKeyHash := sha256.Sum256(pubKey)
+	ripemd160Hasher := ripemd160.New()
+	ripemd160Hasher.Write(pubKeyHash[:])
+	result := ripemd160Hasher.Sum(nil)
+
+	return result
+}
+
+func CheckSum(payload []byte) []byte{
+	firstHash := sha256.Sum256(payload)
+	secondHash := sha256.Sum256(firstHash[:])
+
+	return secondHash[:4]
+}
 
 // Base58Encode encodes a byte array to Base58
 func Base58Encode(input []byte) []byte {

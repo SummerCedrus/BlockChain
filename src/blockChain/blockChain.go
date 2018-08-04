@@ -9,6 +9,7 @@ import (
 	"bytes"
 	."tx"
 	"encoding/hex"
+	"wallets"
 )
 
 type BlockChain struct {
@@ -64,8 +65,10 @@ func (bc *BlockChain) Print() {
 //找出够消耗的未花费的输出
 //return btcoin数, map[交易ID]输出Index
 func (bc *BlockChain) getUnSpendInfo(address string, amount int32) (int32, map[string][]int32){
+	w := wallets.GetWallet(address)
+	pubKeyHash := HashPubKey(w.PublicKey)
 	outPuts := make(map[string][]int32, 0)
-	unSpendTxs := bc.getUnSpendTransactions(address)
+	unSpendTxs := bc.getUnSpendTransactions(pubKeyHash)
 	total := int32(0)
 	for _, tx:= range unSpendTxs{
 		txId := hex.EncodeToString(tx.ID)
@@ -82,7 +85,7 @@ func (bc *BlockChain) getUnSpendInfo(address string, amount int32) (int32, map[s
 	return total, outPuts
 }
 
-func (bc *BlockChain) getUnSpendTransactions(address string) []UpSpendTxs{
+func (bc *BlockChain) getUnSpendTransactions(pubKeyHash []byte) []UpSpendTxs{
 	bci := bc.Iterator()
 	//记录未花费输出map[交易id]输出index
 	unSpendOuts := make([]UpSpendTxs,0)
@@ -107,7 +110,7 @@ func (bc *BlockChain) getUnSpendTransactions(address string) []UpSpendTxs{
 						}
 					}
 				}
-				if !isSpend&&output.CanBeUnLockByAddr(address){
+				if !isSpend&&output.IsLockedByPubKeyHash(pubKeyHash){
 					txWithUpSpendOuts.Outs[int32(index)] = output
 					unSpendOuts = append(unSpendOuts, txWithUpSpendOuts)
 				}
@@ -115,7 +118,8 @@ func (bc *BlockChain) getUnSpendTransactions(address string) []UpSpendTxs{
 
 			for _, input := range tx.Vin {
 				//输入的pubkey能对上钱包地址hash来的pubkey，说明是这个钱包创建的这个输入，这个输入肯定引用的这个钱包包含的输出
-				if input.CanUnLockOutPut(address){
+				//这样可以找出发起交易者输入引用的输出，因为交易都是有序的，所有可以逐渐找齐对比，不用一次全找出来
+				if input.CanUnLockOutPut(pubKeyHash){
 					quoteTxId := hex.EncodeToString(input.TxId)
 					spendOuts[quoteTxId] = append(spendOuts[quoteTxId], input.OutIndex)
 				}
@@ -130,8 +134,10 @@ func (bc *BlockChain) getUnSpendTransactions(address string) []UpSpendTxs{
 }
 
 func (bc *BlockChain) GetBalance(address string) int32{
+	w := wallets.GetWallet(address)
+	pubKeyHash := HashPubKey(w.PublicKey)
 	balance := int32(0)
-	txos := bc.getUnSpendTransactions(address)
+	txos := bc.getUnSpendTransactions(pubKeyHash)
 	for _, txo := range txos{
 		for _, out := range txo.Outs{
 			balance += out.Value
@@ -168,7 +174,6 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 	bc := new(BlockChain)
 	db, err := Open(filePath, 0600, nil)
 	if nil != err||nil == db{
-		fmt.Printf("Open db [%s] failed error[%s]!",filePath, err.Error())
 		panic(fmt.Sprintf("Open db [%s] failed error[%s]!",filePath, err.Error()))
 		return nil
 	}
@@ -199,6 +204,8 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 }
 
 func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
+	fromWallet := wallets.GetWallet(from)
+	toWallet := wallets.GetWallet(to)
 	inPuts := make([]TxInput, 0)
 	outPuts := make([]TxOutput, 0)
 	total, outPutInfos := bc.getUnSpendInfo(from, amount)
@@ -212,7 +219,7 @@ func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
 			inPut := TxInput{
 				TxId: []byte(txId),
 				OutIndex: index,
-				ScriptSig:from,
+				PubKey:fromWallet.PublicKey,
 			}
 			inPuts = append(inPuts, inPut)
 		}
@@ -220,13 +227,13 @@ func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
 
 	outPuts = append(outPuts, TxOutput{
 		Value: amount,
-		ScriptPubKey:to,
+		PubKeyHash:HashPubKey(toWallet.PublicKey),
 	})
 	//如果有找零，再创建个输出
 	if total > amount{
 		outPuts = append(outPuts, TxOutput{
 			Value: total - amount,
-			ScriptPubKey: to,
+			PubKeyHash:HashPubKey(fromWallet.PublicKey),
 		})
 	}
 
@@ -241,16 +248,17 @@ func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
 }
 
 func NewCoinBaseTX(to string, data string) *Transaction{
+	toWallet := wallets.GetWallet(to)
 	outPuts := make([]TxOutput, 0)
 
 	out := TxOutput{
 		Value:CoinAward,
-		ScriptPubKey:to,
+		PubKeyHash:HashPubKey(toWallet.PublicKey),
 	}
 
 	outPuts = append(outPuts, out)
 
-	in := TxInput{[]byte{}, -1, data}
+	in := TxInput{[]byte{}, -1, data, []byte{}}
 
 	tx := Transaction{
 		Vout:outPuts,

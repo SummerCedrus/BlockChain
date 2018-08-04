@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"blockChain"
 	"cil"
+	"misc"
+	"wallets"
 )
 
 func main(){
-	bc := blockChain.OpenBlockChain("./db/blockchain.db","chain_1")
+	bc := blockChain.OpenBlockChain(misc.Block_Chain_Path,"chain_1")
 	if nil == bc{
 		fmt.Println("open block chain failed!")
 		return

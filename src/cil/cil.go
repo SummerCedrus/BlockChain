@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"blockChain"
 	"tx"
+	"wallets"
 )
 
 type CLI struct {
@@ -22,6 +23,8 @@ func (cli *CLI)Run(){
 	printChain := flag.NewFlagSet("printChain", flag.ExitOnError)
 	balance := flag.NewFlagSet("balance", flag.ExitOnError)
 	send := flag.NewFlagSet("send", flag.ExitOnError)
+	createWallet := flag.NewFlagSet("createWallet", flag.ExitOnError)
+	printAddress := flag.NewFlagSet("printAddress", flag.ExitOnError)
 
 	if len(os.Args)<2{
 		fmt.Errorf("Wrong Arg Number!!!")
@@ -36,6 +39,10 @@ func (cli *CLI)Run(){
 		balance.Parse(os.Args[2:])
 	case "send":
 		send.Parse(os.Args[2:])
+	case "createWallet":
+		createWallet.Parse(os.Args[2:])
+	case "printAddress":
+		printAddress.Parse(os.Args[2:])
 	default:
 		fmt.Errorf("Error Cmd [%s]", os.Args[1])
 		panic("")
@@ -59,6 +66,13 @@ func (cli *CLI)Run(){
 		to := send.String("to","", "to address")
 		amount := send.Int("amount", 0, "send coin amount")
 		cli.send(*from, *to, int32(*amount))
+	}
+	if createWallet.Parsed(){
+		cli.createWallet()
+	}
+
+	if printAddress.Parsed(){
+		cli.printAddress()
 	}
 }
 
@@ -96,5 +110,20 @@ func (cil *CLI)send(from, to string, amount int32){
 	}
 
 	fmt.Println("send SUCCESS")
+}
+
+func (cil *CLI)createWallet()  {
+	ws := new(wallets.Wallets)
+	ws.InitWallets()
+	address := ws.CreateWallet()
+	fmt.Printf("Create Wallet Success!Address[%s]", address)
+}
+
+func (cil *CLI)printAddress(){
+	ws := new(wallets.Wallets)
+	ws.InitWallets()
+	for address := range ws.Wallets{
+		fmt.Println(address)
+	}
 }
 

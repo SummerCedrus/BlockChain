@@ -113,3 +113,9 @@ func ReverseBytes(data []byte) {
 		data[i], data[j] = data[j], data[i]
 	}
 }
+
+func DecodeAddress(address string) []byte{
+	payload := Base58Decode([]byte(address))
+	pubKeyHash:= payload[1:len(payload)-4]
+	return pubKeyHash
+}

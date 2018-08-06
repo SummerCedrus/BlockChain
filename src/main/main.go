@@ -5,7 +5,6 @@ import (
 	"blockChain"
 	"cil"
 	"misc"
-	"wallets"
 )
 
 func main(){

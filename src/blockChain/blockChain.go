@@ -10,6 +10,7 @@ import (
 	."tx"
 	"encoding/hex"
 	"wallets"
+	"crypto/ecdsa"
 )
 
 type BlockChain struct {
@@ -25,6 +26,11 @@ type BlockChainIter struct{
 }
 
 func (bc *BlockChain) AddBlock(txs []*Transaction) error{
+	for _, tx := range txs{
+		if !bc.VerifyTransaction(tx){
+			panic(fmt.Sprintf("Can't Verify Tx[%s]", hex.EncodeToString(tx.ID)))
+		}
+	}
 	nb := block.NewBlock(bc.tip, txs)
 	db := bc.db
 	err := db.Update(func(tx *Tx) error {
@@ -204,10 +210,9 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 }
 
 func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
-	fromWallet := wallets.GetWallet(from)
-	toWallet := wallets.GetWallet(to)
 	inPuts := make([]TxInput, 0)
 	outPuts := make([]TxOutput, 0)
+	fromWallet := wallets.GetWallet(from)
 	total, outPutInfos := bc.getUnSpendInfo(from, amount)
 	if total < amount{
 		fmt.Errorf("Not Enough Coins!")
@@ -225,16 +230,10 @@ func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
 		}
 	}
 
-	outPuts = append(outPuts, TxOutput{
-		Value: amount,
-		PubKeyHash:HashPubKey(toWallet.PublicKey),
-	})
+	outPuts = append(outPuts, *NewTxOutput(amount,to))
 	//如果有找零，再创建个输出
 	if total > amount{
-		outPuts = append(outPuts, TxOutput{
-			Value: total - amount,
-			PubKeyHash:HashPubKey(fromWallet.PublicKey),
-		})
+		outPuts = append(outPuts, *NewTxOutput(total - amount, from))
 	}
 
 	tx := &Transaction{
@@ -244,21 +243,57 @@ func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
 
 	tx.GenID()
 
+	bc.SignTransaction(tx, fromWallet.PrivateKey)
+
 	return tx
 }
 
+func (bc *BlockChain)GetTransaction(txId []byte) *Transaction{
+	bci := bc.Iterator()
+	for{
+		b := bci.Next()
+		for _, tx := range b.Transactions{
+			if bytes.Compare(tx.ID, txId) == 0{
+				return tx
+			}
+		}
+		if len(b.PreBlockHash) == 0{
+			break
+		}
+	}
+
+	return nil
+}
+//取一个交易的前置交易(该所有输入引用的交易)
+func (bc *BlockChain)GetTxPreTransactions(tx *Transaction) map[string]*Transaction{
+	preTxs := make(map[string]*Transaction, 0)
+	for _, in := range tx.Vin{
+		tx := bc.GetTransaction(in.TxId)
+		if tx == nil{
+			fmt.Errorf("Can't Get Tx, TxID[%s]", hex.EncodeToString(in.TxId))
+		}
+		preTxs[hex.EncodeToString(in.TxId)] = tx
+	}
+
+	return preTxs
+}
+func (bc *BlockChain)SignTransaction(tx *Transaction, priKey ecdsa.PrivateKey){
+	preTxs := bc.GetTxPreTransactions(tx)
+	tx.Sign(priKey, preTxs)
+}
+
+func (bc *BlockChain)VerifyTransaction(tx *Transaction) bool{
+	preTxs := bc.GetTxPreTransactions(tx)
+	return tx.Verify(preTxs)
+}
 func NewCoinBaseTX(to string, data string) *Transaction{
-	toWallet := wallets.GetWallet(to)
 	outPuts := make([]TxOutput, 0)
 
-	out := TxOutput{
-		Value:CoinAward,
-		PubKeyHash:HashPubKey(toWallet.PublicKey),
-	}
+	out := *NewTxOutput(CoinAward, to)
 
 	outPuts = append(outPuts, out)
 
-	in := TxInput{[]byte{}, -1, data, []byte{}}
+	in := TxInput{[]byte{}, -1, []byte(data), []byte{}}
 
 	tx := Transaction{
 		Vout:outPuts,

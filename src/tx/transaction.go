@@ -32,8 +32,8 @@ type TxInput struct {
 }
 
 type UpSpendTxs struct {
-	ID 		[]byte
-	Outs	map[int32]TxOutput
+	ID 		[]byte	//交易ID
+	Outs	map[int32]TxOutput//map[交易输出index]交易输出
 }
 func (tx *Transaction) GenID(){
 	data := Serialize(tx)

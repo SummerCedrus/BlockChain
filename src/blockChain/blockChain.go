@@ -25,10 +25,6 @@ type BlockChainIter struct{
 	bucketName []byte
 }
 
-type UTXOSet struct {
-	bc *BlockChain
-}
-
 func (bc *BlockChain) AddBlock(txs []*Transaction) error{
 	for _, tx := range txs{
 		if !bc.VerifyTransaction(tx){
@@ -49,6 +45,9 @@ func (bc *BlockChain) AddBlock(txs []*Transaction) error{
 	})
 
 	bc.tip = nb.Hash
+	//更新UTXOSet
+	u := bc.GetUTXOSet()
+	u.Update(*nb)
 	return err
 }
 //挖矿
@@ -78,7 +77,8 @@ func (bc *BlockChain) getUnSpendInfo(address string, amount int32) (int32, map[s
 	w := wallets.GetWallet(address)
 	pubKeyHash := HashPubKey(w.PublicKey)
 	outPuts := make(map[string][]int32, 0)
-	unSpendTxs := bc.getUnSpendTransactions(pubKeyHash)
+	utxoSet := bc.GetUTXOSet()
+	unSpendTxs := utxoSet.getUnspendTxs(pubKeyHash)
 	total := int32(0)
 	for _, tx:= range unSpendTxs{
 		txId := hex.EncodeToString(tx.ID)
@@ -95,18 +95,19 @@ func (bc *BlockChain) getUnSpendInfo(address string, amount int32) (int32, map[s
 	return total, outPuts
 }
 
-func (bc *BlockChain) getUnSpendTransactions(pubKeyHash []byte) []UpSpendTxs{
+func (bc *BlockChain) getUnSpendTransactions(pubKeyHash []byte) []UnSpendTxs{
 	bci := bc.Iterator()
 	//记录未花费输出
-	unSpendOuts := make([]UpSpendTxs,0)
+	unSpendOuts := make([]UnSpendTxs,0)
 	//记录被引用的输出map[交易id]输出index
 	spendOuts := make(map[string][]int32,0)
 	for{
 		b := bci.Next()
 		//整理每笔交易的输入输出，交易是有先后顺序的.先有输出，才有输入
 		for _, tx := range b.Transactions {
-			txWithUpSpendOuts := UpSpendTxs{
+			txWithUpSpendOuts := UnSpendTxs{
 				ID:tx.ID,
+				Outs:make(map[int32]TxOutput),
 			}
 			txID := hex.EncodeToString(tx.ID)
 			//先处理输出
@@ -143,18 +144,19 @@ func (bc *BlockChain) getUnSpendTransactions(pubKeyHash []byte) []UpSpendTxs{
 	return unSpendOuts
 }
 
-func (bc *BlockChain) GetUTXO() []UpSpendTxs{
+func (bc *BlockChain) GetUTXO() []UnSpendTxs{
 	bci := bc.Iterator()
 	//记录未花费输出map[交易id]输出index
-	unSpendOuts := make([]UpSpendTxs,0)
+	unSpendOuts := make([]UnSpendTxs,0)
 	//记录被引用的输出map[交易id]输出index
 	spendOuts := make(map[string][]int32,0)
 	for{
 		b := bci.Next()
 		//整理每笔交易的输入输出，交易是有先后顺序的.先有输出，才有输入
 		for _, tx := range b.Transactions {
-			txWithUpSpendOuts := UpSpendTxs{
+			txWithUpSpendOuts := UnSpendTxs{
 				ID:tx.ID,
+				Outs:make(map[int32]TxOutput),
 			}
 			txID := hex.EncodeToString(tx.ID)
 			//先处理输出
@@ -175,7 +177,7 @@ func (bc *BlockChain) GetUTXO() []UpSpendTxs{
 			}
 
 			for _, input := range tx.Vin {
-				//因为交易都是有序的，所有可以逐渐找齐对比，不用一次全找出来
+				//因为交易都是有序的，所以可以逐渐找齐对比，不用一次全找出来
 				quoteTxId := hex.EncodeToString(input.TxId)
 				spendOuts[quoteTxId] = append(spendOuts[quoteTxId], input.OutIndex)
 			}
@@ -192,7 +194,8 @@ func (bc *BlockChain) GetBalance(address string) int32{
 	w := wallets.GetWallet(address)
 	pubKeyHash := HashPubKey(w.PublicKey)
 	balance := int32(0)
-	txos := bc.getUnSpendTransactions(pubKeyHash)
+	utxoSet := bc.GetUTXOSet()
+	txos := utxoSet.getUnspendTxs(pubKeyHash)
 	for _, txo := range txos{
 		for _, out := range txo.Outs{
 			balance += out.Value
@@ -206,6 +209,10 @@ func (bci *BlockChainIter) Next() *block.Block{
 	curBlock := new(block.Block)
 	db.View(func(tx *Tx) error {
 		bk := tx.Bucket(bci.bucketName)
+		if nil == bk{
+			fmt.Printf("can't get bucket [%s]", bci.bucketName)
+			return nil
+		}
 		data := bk.Get(bci.currHash)
 		if nil == data{
 			return errors.New("can't find block")
@@ -232,9 +239,9 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 		panic(fmt.Sprintf("Open db [%s] failed error[%s]!",filePath, err.Error()))
 		return nil
 	}
-	bk := new(Bucket)
+	needReBuildSet := false
 	err = db.Update(func(tx *Tx) error {
-		bk = tx.Bucket([]byte(bucketName))
+		bk := tx.Bucket([]byte(bucketName))
 		if nil == bk{
 			bk, err = tx.CreateBucket([]byte(bucketName))
 			coinBaseTx := NewCoinBaseTX(FirstAddress,"GenesisBlock Award Coin")
@@ -242,6 +249,7 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 			bk.Put([]byte("tip"), genBlock.Hash)
 			bk.Put(genBlock.Hash, Serialize(genBlock))
 			bc.tip = genBlock.Hash
+			needReBuildSet = true
 			return err
 		}else{
 			bc.tip = bk.Get([]byte("tip"))
@@ -250,6 +258,12 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 	})
 	bc.db = db
 	bc.bucketName = []byte(bucketName)
+	//第一次打开链,创建UTXOSet
+	if needReBuildSet{
+		utxoSet := bc.GetUTXOSet()
+		utxoSet.ReBuild()
+	}
+
 	if nil != err{
 		fmt.Errorf("Open Bucket [%d] failed error[%s]", bucketName, err.Error())
 		return nil
@@ -258,6 +272,9 @@ func OpenBlockChain(filePath string, bucketName string) *BlockChain{
 	return bc
 }
 
+func (bc *BlockChain)GetUTXOSet()*UTXOSet{
+	return &UTXOSet{bc}
+}
 func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
 	inPuts := make([]TxInput, 0)
 	outPuts := make([]TxOutput, 0)
@@ -334,78 +351,6 @@ func (bc *BlockChain)SignTransaction(tx *Transaction, priKey ecdsa.PrivateKey){
 func (bc *BlockChain)VerifyTransaction(tx *Transaction) bool{
 	preTxs := bc.GetTxPreTransactions(tx)
 	return tx.Verify(preTxs)
-}
-//重建UTXO集
-func (u *UTXOSet)ReBuild()  {
-	db, err := Open(UTXO_Set_File_Path, 0600, nil)
-	if nil != err||nil == db{
-		panic(fmt.Sprintf("Open db [%s] failed error[%s]!",UTXO_Set_File_Path, err.Error()))
-		return
-	}
-	utxo := u.bc.GetUTXO()
-	err = db.Update(func(tx *Tx) error {
-		err := tx.DeleteBucket([]byte(UTXO_Set_Name))
-		bk, err:= tx.CreateBucket([]byte(UTXO_Set_Name))
-		for _, txo := range utxo{
-			err = bk.Put(txo.ID, Serialize(txo.Outs))
-		}
-
-		return err
-	})
-
-	if nil != err{
-		fmt.Errorf("ReBulid Error [%s]", err.Error())
-	}
-}
-//通过block的交易信息去更新UTXO集
-func (u *UTXOSet)Update(block block.Block){
-	db, err := Open(UTXO_Set_File_Path, 0600, nil)
-	if nil != err||nil == db{
-		panic(fmt.Sprintf("Open db [%s] failed error[%s]!",UTXO_Set_File_Path, err.Error()))
-		return
-	}
-
-	err = db.Update(func(tx *Tx) error {
-		bk := tx.Bucket([]byte(UTXO_Set_Name))
-		if nil == bk{
-			bk, err =tx.CreateBucket([]byte(UTXO_Set_Name))
-		}
-
-		for _, t := range block.Transactions{
-			usp := UpSpendTxs{
-				ID: t.ID,
-			}
-			//将交易里面的新的输出更新到UTXO集
-			for index, out := range t.Vout{
-				usp.Outs[int32(index)] = out
-			}
-
-			err = bk.Put(t.ID, Serialize(usp))
-			//将交易里面输入引用的输出从UTXO集删除
-			if t.IsCoinBase(){
-				continue
-			}
-
-			for _, in := range t.Vin{
-				outsBytes := bk.Get(in.TxId)
-				outs := new(UpSpendTxs)
-				Deserialize(outsBytes, outs)
-				delete(outs.Outs, in.OutIndex)
-				//如果交易对应的未花费输出空了，把交易也删除
-				if len(outs.Outs) == 0{
-					bk.Delete(in.TxId)
-				}else{
-					bk.Put(in.TxId, Serialize(outs))
-				}
-			}
-		}
-
-		return err
-	})
-
-	if nil != err{
-		fmt.Errorf("Update Error [%s]", err.Error())
-	}
 }
 
 func NewCoinBaseTX(to string, data string) *Transaction{

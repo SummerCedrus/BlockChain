@@ -20,7 +20,7 @@ func Serialize(v interface{}) ([]byte){
 	enc := gob.NewEncoder(buffer)
 	err := enc.Encode(v)
 	if nil != err{
-		fmt.Errorf("Encode failed error[%s]", err.Error())
+		fmt.Printf("Encode failed error[%s]", err.Error())
 		return buffer.Bytes()
 	}
 	return buffer.Bytes()
@@ -31,7 +31,7 @@ func Deserialize(b []byte, e interface{}) error{
 	dec := gob.NewDecoder(reader)
 	err := dec.Decode(e)
 	if nil != err{
-		fmt.Errorf("Encode failed error[%s]", err.Error())
+		fmt.Printf("Encode failed error[%s]", err.Error())
 		return err
 	}
 

@@ -25,7 +25,8 @@ func (cli *CLI)Run(){
 	send := flag.NewFlagSet("send", flag.ExitOnError)
 	createWallet := flag.NewFlagSet("createWallet", flag.ExitOnError)
 	printAddress := flag.NewFlagSet("printAddress", flag.ExitOnError)
-
+	printUTXOSet := flag.NewFlagSet("printUTXOSet", flag.ExitOnError)
+	reBuildUTXOSet := flag.NewFlagSet("reBuildUTXOSet", flag.ExitOnError)
 	if len(os.Args)<2{
 		fmt.Errorf("Wrong Arg Number!!!")
 		return
@@ -43,6 +44,10 @@ func (cli *CLI)Run(){
 		createWallet.Parse(os.Args[2:])
 	case "printAddress":
 		printAddress.Parse(os.Args[2:])
+	case "printUTXOSet":
+		printUTXOSet.Parse(os.Args[2:])
+	case "reBuildUTXOSet":
+		reBuildUTXOSet.Parse(os.Args[2:])
 	default:
 		fmt.Errorf("Error Cmd [%s]", os.Args[1])
 		panic("")
@@ -73,6 +78,14 @@ func (cli *CLI)Run(){
 
 	if printAddress.Parsed(){
 		cli.printAddress()
+	}
+
+	if printUTXOSet.Parsed(){
+		cli.printUTXOSet()
+	}
+
+	if reBuildUTXOSet.Parsed(){
+		cli.reBuildUTXOSet()
 	}
 }
 
@@ -125,5 +138,15 @@ func (cil *CLI)printAddress(){
 	for address := range ws.Wallets{
 		fmt.Println(address)
 	}
+}
+
+func (cil *CLI)printUTXOSet(){
+	u := cil.bc.GetUTXOSet()
+	u.Print()
+}
+
+func (cil *CLI)reBuildUTXOSet(){
+	u := cil.bc.GetUTXOSet()
+	u.ReBuild()
 }
 

@@ -31,7 +31,7 @@ type TxInput struct {
 	PubKey  []byte //交易发起者的公钥
 }
 
-type UpSpendTxs struct {
+type UnSpendTxs struct {
 	ID 		[]byte	//交易ID
 	Outs	map[int32]TxOutput//map[交易输出index]交易输出
 }

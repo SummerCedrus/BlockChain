@@ -27,6 +27,10 @@ func (cli *CLI)Run(){
 	printAddress := flag.NewFlagSet("printAddress", flag.ExitOnError)
 	printUTXOSet := flag.NewFlagSet("printUTXOSet", flag.ExitOnError)
 	reBuildUTXOSet := flag.NewFlagSet("reBuildUTXOSet", flag.ExitOnError)
+
+	from := send.String("from", "", "from address")
+	to := send.String("to","", "to address")
+	amount := send.Int("amount", 0, "send coin amount")
 	if len(os.Args)<2{
 		fmt.Errorf("Wrong Arg Number!!!")
 		return
@@ -67,10 +71,10 @@ func (cli *CLI)Run(){
 		cli.getBalance(*address)
 	}
 	if send.Parsed(){
-		from := send.String("from", "", "from address")
-		to := send.String("to","", "to address")
-		amount := send.Int("amount", 0, "send coin amount")
-		cli.send(*from, *to, int32(*amount))
+
+		fmt.Printf("%v", os.Args[2:])
+		fmt.Printf("from[%v] to[%v] amount[%d]", *from, *to, *amount)
+		//cli.send(*from, *to, int32(*amount))
 	}
 	if createWallet.Parsed(){
 		cli.createWallet()
@@ -116,6 +120,9 @@ func (cil *CLI)getBalance(address string){
 func (cil *CLI)send(from, to string, amount int32){
 	bc := cil.bc
 	trans := bc.NewTransaction(from, to, amount)
+	if nil == trans{
+		return
+	}
 	err := bc.AddBlock([]*tx.Transaction{trans})
 	if nil != err{
 		fmt.Errorf("send error [%s]",err.Error())
@@ -129,6 +136,7 @@ func (cil *CLI)createWallet()  {
 	ws := new(wallets.Wallets)
 	ws.InitWallets()
 	address := ws.CreateWallet()
+	ws.SaveWallets()
 	fmt.Printf("Create Wallet Success!Address[%s]", address)
 }
 

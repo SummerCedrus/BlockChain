@@ -75,6 +75,9 @@ func (bc *BlockChain) Print() {
 //return btcoin数, map[交易ID]输出Index
 func (bc *BlockChain) getUnSpendInfo(address string, amount int32) (int32, map[string][]int32){
 	w := wallets.GetWallet(address)
+	if nil == w{
+		return 0, nil
+	}
 	pubKeyHash := HashPubKey(w.PublicKey)
 	outPuts := make(map[string][]int32, 0)
 	utxoSet := bc.GetUTXOSet()
@@ -192,6 +195,9 @@ func (bc *BlockChain) GetUTXO() []UnSpendTxs{
 
 func (bc *BlockChain) GetBalance(address string) int32{
 	w := wallets.GetWallet(address)
+	if nil == w{
+		return 0
+	}
 	pubKeyHash := HashPubKey(w.PublicKey)
 	balance := int32(0)
 	utxoSet := bc.GetUTXOSet()
@@ -279,9 +285,12 @@ func (bc *BlockChain)NewTransaction(from, to string, amount int32) *Transaction{
 	inPuts := make([]TxInput, 0)
 	outPuts := make([]TxOutput, 0)
 	fromWallet := wallets.GetWallet(from)
+	if nil == fromWallet{
+		return nil
+	}
 	total, outPutInfos := bc.getUnSpendInfo(from, amount)
 	if total < amount{
-		fmt.Errorf("Not Enough Coins!")
+		fmt.Printf("Not Enough Coins!")
 		return nil
 	}
 

@@ -9,7 +9,6 @@ import (
 	."github.com/bolt"
 	"encoding/gob"
 	"bytes"
-	"errors"
 )
 
 type Wallet struct {
@@ -59,7 +58,6 @@ func (ws *Wallets)CreateWallet() string{
 	if wallet == nil{
 		fmt.Errorf("CreateWallet Error!!!")
 	}
-
 	addr := wallet.GetAddress()
 
 	ws.Wallets[addr] = wallet
@@ -71,22 +69,28 @@ func (ws *Wallets)GetWallet(address string) *Wallet{
 	if w, ok := ws.Wallets[address]; ok{
 		return w
 	}
-	fmt.Errorf("Cant Find Wallet By Address[%s]", address)
+	fmt.Printf("Cant Find Wallet By Address[%s]", address)
 
 	return nil
 }
 
 func (ws *Wallets) InitWallets(){
+	ws.Wallets = make(map[string]*Wallet, 0)
 	db, err := Open(Wallet_File_Path, 0600, nil)
 	if nil != err||nil == db{
 		panic(fmt.Sprintf("Open db [%s] failed error[%s]!",Wallet_File_Path, err.Error()))
 		return
 	}
-
-	err = db.View(func(tx *Tx) error {
+	defer func() {
+		db.Close()
+	}()
+	err = db.Update(func(tx *Tx) error {
 		b := tx.Bucket([]byte(Wallet_Bucket_Name))
 		if nil == b{
-			return errors.New(fmt.Sprintf("open bucket [%s] failed", Wallet_Bucket_Name))
+			b, err = tx.CreateBucket([]byte(Wallet_Bucket_Name))
+			if nil != err{
+				return err
+			}
 		}
 		//键:address 值:wallet
 		err := b.ForEach(func(k, v []byte) error {
@@ -114,15 +118,21 @@ func (ws *Wallets) InitWallets(){
 
 func (ws *Wallets) SaveWallets(){
 	db, err := Open(Wallet_File_Path, 0600, nil)
+
 	if nil != err||nil == db{
 		panic(fmt.Sprintf("Open db [%s] failed error[%s]!",Wallet_File_Path, err.Error()))
 		return
 	}
-
+	defer func() {
+		db.Close()
+	}()
 	db.Update(func(tx *Tx) error {
 		b := tx.Bucket([]byte(Wallet_Bucket_Name))
 		if nil == b{
-			return errors.New(fmt.Sprintf("open bucket [%s] failed", Wallet_Bucket_Name))
+			b, err = tx.CreateBucket([]byte(Wallet_Bucket_Name))
+			if nil != err{
+				return err
+			}
 		}
 		gob.Register(elliptic.P256())
 		for addr, wallet := range ws.Wallets{
